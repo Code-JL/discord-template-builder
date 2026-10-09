@@ -12,6 +12,7 @@ scripts/
 templates/
 docs/superpowers/
 .superpowers/
+*.id-map.json
 
 # Editors and OS
 .vscode/

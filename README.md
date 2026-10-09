@@ -12,8 +12,9 @@ server; afterwards you can generate an official link from it.
 ## Warning
 
 A build **wipes the target server first**: every channel, and every role below
-the bot's role, is deleted. Build into a new, empty server. The tool shows what
-it will delete and makes you type the server's name before it changes anything.
+the bot's role, is deleted. Build into a new, empty server. The tool shows how
+much it will delete (the dry run lists every name) and makes you type the
+server's name before it changes anything.
 
 ## Requirements
 
@@ -46,7 +47,9 @@ cp .env.example .env
    **Administrator** ticked and click **Authorize**.
 3. Settings → Advanced → **Developer Mode** on; right-click the server →
    **Copy Server ID**.
-4. Leave the bot's role where Discord puts it. The builder creates every role below it, in the template's order.
+4. Leave the bot's role where Discord puts it. The builder creates every role
+   below it, in the template's order. If you ever kick and re-invite the bot,
+   drag its role back to the top of the role list before building.
 
 ## Usage
 
@@ -58,7 +61,9 @@ python -m src.main --template templates/my-server.json --guild <server id>
 - The **dry run** lists every channel and role it would delete and create, and
   every adjustment, without changing anything. Check it for channels you don't
   want (bot counters such as `Members: 142`, temporary voice rooms) and delete
-  them from the template file first.
+  them from the template file first. If you delete the AFK or system channel,
+  or a whole category, also remove the references to it (the error message
+  names them).
 - The **real run** asks you to type the server's name. Run it in a normal
   terminal; it refuses to run when it can't ask.
 - It prints a line per step. A server with ~120 channels and ~70 roles takes
@@ -82,8 +87,9 @@ store channel or role IDs in their config, a successful build writes
 }
 ```
 
-Use `by_old_id` to find-and-replace old IDs in a bot's config. Re-running the
-build makes new IDs again, so redo the replacement after every build. Templates
+Use `by_old_id` to find-and-replace old IDs in a bot's config. Apply `by_old_id`
+to a copy of your bot's original config each time — after a rebuild the new IDs
+change again. Templates
 exported before discord-template-export recorded `source_ids` get no map;
 re-export them.
 
@@ -100,12 +106,14 @@ Everything below is listed in the dry run and in the final report.
   to the original server. Unicode emoji are kept.
 - **Announcement and stage channels** become text and voice channels unless
   the server has Community enabled.
-- **Forum channels** work on any server; if Discord ever refuses one, it's created as a text channel instead.
+- **Forum channels** work on any server; if Discord ever refuses one, it's
+  created as a text channel instead.
 - **Description and language** are only set on Community servers.
 - **Per-member permission overrides** are skipped (the template doesn't carry them).
 
-Never touched: `@everyone` itself, roles managed by bots or boosts, roles above
-the bot's role, and the rules/updates channels of a Community server.
+Never deleted: `@everyone` (its permissions are replaced), roles managed by bots
+or boosts, roles above the bot's role, and the rules/updates channels of a
+Community server.
 
 ## After the build
 
@@ -131,6 +139,7 @@ src/
   config.py     BOT_TOKEN from .env; bot id and invite link from the token
   template.py   load and check template.json
   plan.py       what to delete, create and adjust (no network)
+  idmap.py      old ID → new ID map written after a build
   builder.py    reads the server, runs the plan, maps old ids to new ones
   api.py        Discord bot API client with rate-limit handling
   errors.py     error types
