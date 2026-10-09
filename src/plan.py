@@ -29,6 +29,7 @@ class Target:
     bot_top_position: int
     rules_channel_id: str | None = None
     public_updates_channel_id: str | None = None
+    bot_top_role_id: str | None = None
 
 
 @dataclass
@@ -72,13 +73,21 @@ def text_fallback(payload):
     return fallback
 
 
+def _below_bot(role, target):
+    """True if the role ranks under the bot's top role (equal positions: the older role is higher)."""
+    position = role.get("position", 0)
+    if position != target.bot_top_position:
+        return position < target.bot_top_position
+    return target.bot_top_role_id is not None and int(role["id"]) > int(target.bot_top_role_id)
+
+
 def _plan_wipe(target, plan):
     for role in target.roles:
         if role["id"] == target.guild_id:
             continue
         if role.get("managed"):
             plan.protected.append(f'role "{role["name"]}" (managed by an integration)')
-        elif role.get("position", 0) >= target.bot_top_position:
+        elif not _below_bot(role, target):
             plan.protected.append(f'role "{role["name"]}" (not below the bot\'s role)')
         else:
             plan.delete_roles.append(role)
@@ -110,6 +119,9 @@ def _plan_roles(source, target, plan):
             else:
                 plan.adjustments.append(f'role "{role["name"]}": emoji icon dropped (server has no role icons)')
         plan.create_roles.append(RoleStep(role["id"], payload))
+    # New roles all land at position 1 and Discord ranks equal positions by age (older is higher), so
+    # creating them top to bottom sets the final order without a reorder call, which a bot may not make.
+    plan.create_roles.reverse()
 
 
 def _plan_channels(source, target, plan):

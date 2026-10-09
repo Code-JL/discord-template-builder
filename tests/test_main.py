@@ -67,7 +67,7 @@ def test_dry_run_survives_non_utf8_stdout(env, monkeypatch):
 def test_build_after_typing_the_name(env, capsys):
     api, template = env
     assert _run(template) == 0
-    assert len(api.writes()) == 19
+    assert len(api.writes()) == 18
     out = capsys.readouterr().out
     assert "Done: 4 channels deleted, 1 roles deleted, 2 roles created, 9 channels created" in out
     id_map_file = template.with_name("template.id-map.json")

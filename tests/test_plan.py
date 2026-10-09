@@ -4,7 +4,7 @@ import pytest
 
 from src.plan import RoleStep, build_plan, text_fallback
 from src.template import load_template
-from tests.fakes import make_target
+from tests.fakes import GUILD_ID, make_target
 
 FIXTURE = Path(__file__).parent / "fixtures" / "template.json"
 
@@ -42,17 +42,32 @@ def test_everyone_and_role_payloads(source):
     plan = build_plan(source, make_target())
     assert plan.everyone_permissions == "1071698660929"
     assert plan.create_roles == [
-        RoleStep(1, {"name": "Member", "permissions": "104324673", "color": 3447003,
-                     "hoist": True, "mentionable": False}),
         RoleStep(2, {"name": "Moderator", "permissions": "1099511627775", "color": 15158332,
                      "hoist": True, "mentionable": True}),
+        RoleStep(1, {"name": "Member", "permissions": "104324673", "color": 3447003,
+                     "hoist": True, "mentionable": False}),
     ]
     assert 'role "Moderator": emoji icon dropped (server has no role icons)' in plan.adjustments
 
 
+def test_roles_created_top_to_bottom(source):
+    plan = build_plan(source, make_target())
+    assert [s.template_id for s in plan.create_roles] == [2, 1]
+
+
+def test_roles_tied_with_the_bot_are_ranked_by_age(source):
+    roles = [{"id": GUILD_ID, "name": "@everyone", "position": 0},
+             {"id": "901", "name": "Builder", "position": 1, "managed": True},
+             {"id": "950", "name": "Newer", "position": 1},
+             {"id": "800", "name": "Older", "position": 1}]
+    plan = build_plan(source, make_target(roles=roles, bot_top_position=1, bot_top_role_id="901"))
+    assert [r["id"] for r in plan.delete_roles] == ["950"]
+    assert "role \"Older\" (not below the bot's role)" in plan.protected
+
+
 def test_role_icons_kept_when_server_has_them(source):
     plan = build_plan(source, make_target(features=frozenset({"ROLE_ICONS"})))
-    assert plan.create_roles[1].payload["unicode_emoji"] == "🛡️"
+    assert plan.create_roles[0].payload["unicode_emoji"] == "🛡️"
     assert not any("emoji icon" in a for a in plan.adjustments)
 
 

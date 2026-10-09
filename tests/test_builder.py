@@ -27,6 +27,7 @@ def test_read_target():
     api = FakeApi(server_state())
     target = read_target(api, GUILD_ID)
     assert (target.name, target.bot_top_position, target.premium_tier) == ("Copy", 2, 0)
+    assert target.bot_top_role_id == "901"
     assert [c["id"] for c in target.channels] == ["910", "911", "912", "913"]
     assert api.calls == [("GET", "/users/@me", None), ("GET", f"/guilds/{GUILD_ID}", None),
                          ("GET", f"/guilds/{GUILD_ID}/channels", None),
@@ -51,30 +52,29 @@ def test_build_runs_steps_in_order_and_wires_new_ids():
         ("DELETE", f"/guilds/{g}/roles/902"),
         ("PATCH", f"/guilds/{g}/roles/{g}"),
         ("POST", f"/guilds/{g}/roles"), ("POST", f"/guilds/{g}/roles"),
-        ("PATCH", f"/guilds/{g}/roles"),
         *[("POST", f"/guilds/{g}/channels")] * 9,
         ("PATCH", f"/guilds/{g}"),
     ]
     assert api.calls[5][2] == {"permissions": "1071698660929"}
-    assert api.calls[8][2] == [{"id": "new1", "position": 1}, {"id": "new2", "position": 2}]
+    assert ("PATCH", f"/guilds/{g}/roles") not in [(m, p) for m, p, _ in api.calls]
     posts = {body["name"]: body for method, path, body in api.calls
              if method == "POST" and path.endswith("/channels")}
     assert posts["Info"]["permission_overwrites"] == [{"id": g, "type": 0, "allow": "0", "deny": "2048"}]
     assert posts["👋-welcome"]["parent_id"] == "new3"
-    assert posts["👋-welcome"]["permission_overwrites"] == [{"id": "new2", "type": 0, "allow": "2048", "deny": "0"}]
+    assert posts["👋-welcome"]["permission_overwrites"] == [{"id": "new1", "type": 0, "allow": "2048", "deny": "0"}]
     assert posts["AFK"]["parent_id"] == "new4"
     assert posts["help"]["permission_overwrites"] == [
         {"id": g, "type": 0, "allow": "0", "deny": "2048"},
-        {"id": "new1", "type": 0, "allow": "2048", "deny": "0"}]
+        {"id": "new2", "type": 0, "allow": "2048", "deny": "0"}]
     settings = api.calls[-1][2]
     assert (settings["afk_channel_id"], settings["system_channel_id"]) == ("new11", "new8")
     assert dict(result.done) == {"channels deleted": 4, "roles deleted": 1, "roles created": 2,
                                  "channels created": 9}
     assert result.adjustments == []
-    assert result.role_ids == {0: g, 1: "new1", 2: "new2"}
+    assert result.role_ids == {0: g, 1: "new2", 2: "new1"}
     assert result.channel_ids == {3: "new3", 7: "new4", 9: "new5", 1: "new6", 2: "new7",
                                   4: "new8", 5: "new9", 6: "new10", 8: "new11"}
-    assert '[create roles 2/2] "Moderator"' in lines
+    assert '[create roles 2/2] "Member"' in lines
     assert '[create channels 9/9] "AFK"' in lines
 
 

@@ -24,11 +24,12 @@ def read_target(api, guild_id):
     held = [role_id for role_id in [guild_id, *member.get("roles", [])] if role_id in roles]
     if not any(int(roles[role_id].get("permissions", "0")) & ADMINISTRATOR for role_id in held):
         raise NotAdministrator(guild_id)
-    top = max((roles[role_id].get("position", 0) for role_id in member.get("roles", []) if role_id in roles),
-              default=0)
+    mine = [roles[role_id] for role_id in member.get("roles", []) if role_id in roles]
+    top = min(mine, key=lambda r: (-r.get("position", 0), int(r["id"])), default=None)
     return Target(guild_id=guild_id, name=guild["name"], features=frozenset(guild.get("features", [])),
                   premium_tier=guild.get("premium_tier", 0), roles=guild["roles"], channels=channels,
-                  bot_top_position=top, rules_channel_id=guild.get("rules_channel_id"),
+                  bot_top_position=top.get("position", 0) if top else 0,
+                  bot_top_role_id=top["id"] if top else None, rules_channel_id=guild.get("rules_channel_id"),
                   public_updates_channel_id=guild.get("public_updates_channel_id"))
 
 
@@ -93,10 +94,6 @@ class Builder:
             self.role_ids[step.template_id] = created["id"]
             self._progress("create roles", i, len(steps), step.payload["name"])
             self.done["roles created"] += 1
-        if steps:
-            self.api.patch(f"/guilds/{self.guild}/roles",
-                           [{"id": self.role_ids[s.template_id], "position": i} for i, s in enumerate(steps, 1)])
-            self.out("[roles] order set")
 
     def _create_channels(self):
         steps = self.plan.create_channels
