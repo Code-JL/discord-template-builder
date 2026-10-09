@@ -1,0 +1,46 @@
+{
+  "source_guild_id": "100",
+  "exported_at": "2026-10-09T13:45:00Z",
+  "dropped": {"managed_roles": ["Server Booster", "MEE6"], "member_overwrites": 2},
+  "source_ids": {
+    "roles": {"0": "100", "1": "201", "2": "202"},
+    "channels": {"1": "307", "2": "308", "3": "301", "4": "302", "5": "303", "6": "306", "7": "304", "8": "305", "9": "309"}
+  },
+  "serialized_source_guild": {
+    "name": "Test Server",
+    "description": null,
+    "verification_level": 1,
+    "default_message_notifications": 1,
+    "explicit_content_filter": 2,
+    "preferred_locale": "en-US",
+    "afk_timeout": 300,
+    "afk_channel_id": 8,
+    "system_channel_id": 4,
+    "system_channel_flags": 0,
+    "roles": [
+      {"id": 0, "name": "@everyone", "permissions": "1071698660929", "color": 0, "hoist": false, "mentionable": false, "icon": null, "unicode_emoji": null},
+      {"id": 1, "name": "Member", "permissions": "104324673", "color": 3447003, "hoist": true, "mentionable": false, "icon": null, "unicode_emoji": null},
+      {"id": 2, "name": "Moderator", "permissions": "1099511627775", "color": 15158332, "hoist": true, "mentionable": true, "icon": null, "unicode_emoji": "🛡️"}
+    ],
+    "channels": [
+      {"id": 1, "type": 0, "name": "general", "position": 0, "parent_id": null, "topic": null, "nsfw": false, "rate_limit_per_user": 0, "permission_overwrites": []},
+      {"id": 2, "type": 0, "name": "orphan", "position": 5, "parent_id": null, "topic": null, "nsfw": false, "rate_limit_per_user": 0, "permission_overwrites": []},
+      {"id": 3, "type": 4, "name": "Info", "position": 0, "parent_id": null, "permission_overwrites": [{"id": 0, "type": 0, "allow": "0", "deny": "2048"}]},
+      {"id": 4, "type": 0, "name": "👋-welcome", "position": 0, "parent_id": 3, "topic": "Say hi", "nsfw": false, "rate_limit_per_user": 0, "permission_overwrites": [{"id": 2, "type": 0, "allow": "2048", "deny": "0"}]},
+      {"id": 5, "type": 0, "name": "rules", "position": 1, "parent_id": 3, "topic": null, "nsfw": false, "rate_limit_per_user": 10, "permission_overwrites": []},
+      {"id": 6, "type": 15, "name": "help", "position": 2, "parent_id": 3, "topic": "Ask here", "nsfw": false, "rate_limit_per_user": 0, "default_auto_archive_duration": 1440,
+       "available_tags": [
+         {"name": "Solved", "moderated": true, "emoji_id": null, "emoji_name": "✅"},
+         {"name": "Bug", "moderated": false, "emoji_id": null, "emoji_name": null}
+       ],
+       "default_reaction_emoji": {"emoji_id": null, "emoji_name": "👍"}, "default_thread_rate_limit_per_user": 0, "default_sort_order": null, "default_forum_layout": 0,
+       "permission_overwrites": [
+         {"id": 0, "type": 0, "allow": "0", "deny": "2048"},
+         {"id": 1, "type": 0, "allow": "2048", "deny": "0"}
+       ]},
+      {"id": 7, "type": 4, "name": "Voice", "position": 1, "parent_id": null, "permission_overwrites": []},
+      {"id": 8, "type": 2, "name": "AFK", "position": 0, "parent_id": 7, "nsfw": false, "rate_limit_per_user": 0, "bitrate": 64000, "user_limit": 0, "permission_overwrites": []},
+      {"id": 9, "type": 4, "name": "Archive", "position": 2, "parent_id": null, "permission_overwrites": []}
+    ]
+  }
+}
