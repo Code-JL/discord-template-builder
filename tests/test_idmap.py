@@ -33,6 +33,17 @@ def test_no_source_ids_means_no_map():
     assert make_id_map(template, "900", _result()) is None
 
 
+def test_ids_missing_on_either_side_are_left_out():
+    template = load_template(FIXTURE)
+    del template.source_ids["channels"][8]          # the result has it, source_ids doesn't
+    result = _result()
+    del result.channel_ids[1]                        # source_ids has it, the result doesn't
+    id_map = make_id_map(template, "900", result)
+    olds = {c["old"] for c in id_map["channels"]}
+    assert "305" not in olds and "307" not in olds
+    assert "305" not in id_map["by_old_id"] and "307" not in id_map["by_old_id"]
+
+
 def test_id_map_path_sits_next_to_the_template(tmp_path):
     assert id_map_path(tmp_path / "my-server.json") == tmp_path / "my-server.id-map.json"
 

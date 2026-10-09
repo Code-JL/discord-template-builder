@@ -8,6 +8,7 @@ BITRATE_MAX = {0: 96000, 1: 128000, 2: 256000, 3: 384000}
 MIN_BITRATE = 8000
 MAX_VOICE_USERS = 99
 MAX_TAGS = 20
+MAX_TEXT_TOPIC = 1024
 COMMUNITY_TYPES = {ANNOUNCEMENT: TEXT, STAGE: VOICE}
 FORUM_ONLY_FIELDS = ("available_tags", "default_reaction_emoji", "default_sort_order", "default_forum_layout")
 OPTIONAL_CHANNEL_FIELDS = ("topic", "nsfw", "rate_limit_per_user", "bitrate", "user_limit",
@@ -70,6 +71,8 @@ def text_fallback(payload):
     """The payload to retry with when Discord refuses a forum or media channel."""
     fallback = {key: value for key, value in payload.items() if key not in FORUM_ONLY_FIELDS}
     fallback["type"] = TEXT
+    if isinstance(fallback.get("topic"), str):
+        fallback["topic"] = fallback["topic"][:MAX_TEXT_TOPIC]   # forum topics may be longer than text ones
     return fallback
 
 

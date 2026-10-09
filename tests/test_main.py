@@ -133,6 +133,74 @@ def test_errors_map_to_messages(env, capsys, error, message):
     assert message in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("error, message", [
+    (Forbidden(403, 50013, "Missing Permissions"), "Discord API error 403 (50013): Missing Permissions"),
+    (Forbidden(403, 50001, "Missing Access"), "Discord API error 403 (50001): Missing Access"),
+    (NotFound(404, 10003, "Unknown Channel"), "Discord API error 404 (10003): Unknown Channel"),
+])
+def test_errors_during_the_build_are_reported_as_api_errors(env, capsys, error, message):
+    api, template = env
+    api.fail_once(lambda method, path, body: method == "POST" and path.endswith("/roles"), error)
+    assert _run(template) == 1
+    err = capsys.readouterr().err
+    assert message in err
+    assert "invite it" not in err and "needs Administrator" not in err
+
+
+def test_kept_and_adjusted_items_are_listed_after_a_real_build(env, capsys):
+    api, template = env
+    assert _run(template) == 0
+    lines = capsys.readouterr().out.splitlines()
+    done = next(i for i, line in enumerate(lines) if line.startswith("Done:"))
+    after = lines[done + 1:]
+    assert '  kept: role "Builder" (managed by an integration)' in after
+    assert "  kept: role \"Admin\" (not below the bot's role)" in after
+    assert any(line.startswith("  adjusted: role \"Moderator\": emoji icon dropped") for line in after)
+
+
+def test_id_map_survives_a_failing_settings_update(env, capsys):
+    api, template = env
+    api.fail_once(lambda method, path, body: method == "PATCH" and path == f"/guilds/{GUILD_ID}",
+                  ApiError(400, 50035, "Invalid Form Body"))
+    assert _run(template) == 1
+    assert template.with_name("template.id-map.json").exists()
+    assert "ID map written to" in capsys.readouterr().out
+
+
+def test_unwritable_id_map_is_printed_and_fails_the_run(env, monkeypatch, capsys):
+    api, template = env
+
+    def refuse(id_map, path):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(cli, "write_id_map", refuse)
+    assert _run(template) == 1
+    out = capsys.readouterr().out
+    assert "denied). The ID map is printed below — save it:" in out
+    assert "Couldn't write " in out
+    assert '"by_old_id"' in out
+
+
+@pytest.mark.parametrize("error", [EOFError, KeyboardInterrupt])
+def test_confirm_cancelled_by_eof_or_ctrl_c(env, capsys, error):
+    api, template = env
+
+    def cancel(prompt):
+        raise error
+
+    assert cli.main(["--template", str(template), "--guild", GUILD_ID],
+                    input_fn=cancel, stdin=FakeStdin(True)) == 1
+    assert api.writes() == []
+    assert "Cancelled — nothing was changed" in capsys.readouterr().err
+
+
+def test_ctrl_c_during_the_build(env, capsys):
+    api, template = env
+    api.fail_once(lambda method, path, body: method == "POST" and path.endswith("/roles"), KeyboardInterrupt())
+    assert _run(template) == 1
+    assert "Interrupted — re-run to wipe and rebuild" in capsys.readouterr().err
+
+
 def test_guild_must_be_numeric(capsys):
     with pytest.raises(SystemExit) as info:
         cli.parse_args(["--template", "t.json", "--guild", "https://discord.com/channels/1/2"])

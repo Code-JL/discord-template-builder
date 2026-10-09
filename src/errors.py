@@ -14,6 +14,10 @@ class NotAdministrator(Exception):
     """The bot is in the server but lacks the Administrator permission."""
 
 
+class NotInServer(Exception):
+    """The bot can't see the server (unknown to it, or it isn't a member)."""
+
+
 class InvalidToken(Exception):
     """Discord rejected BOT_TOKEN (401)."""
 

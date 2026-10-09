@@ -188,3 +188,8 @@ def test_text_fallback_drops_forum_fields_without_mutating():
     assert text_fallback(payload) == {"name": "help", "type": 0, "topic": "t",
                                       "default_thread_rate_limit_per_user": 5}
     assert payload["type"] == 15
+
+
+def test_text_fallback_truncates_topic_to_1024():
+    fallback = text_fallback({"name": "help", "type": 15, "topic": "x" * 1500})
+    assert fallback["topic"] == "x" * 1024

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from src.builder import build, read_target
-from src.errors import ApiError, Forbidden, NotAdministrator
+from src.errors import ApiError, Forbidden, NotAdministrator, NotFound
 from src.plan import build_plan
 from src.template import load_template
 from tests.fakes import BOT_ID, GUILD_ID, FakeApi, server_state
@@ -86,7 +86,9 @@ def test_forum_refused_is_created_as_text():
     attempts = [body for method, path, body in api.calls if method == "POST" and body.get("name") == "help"]
     assert [body["type"] for body in attempts] == [15, 0]
     assert "available_tags" not in attempts[1]
-    assert result.adjustments == ['channel "help": Discord refused type 15; created as text']
+    assert result.adjustments == [
+        'channel "help": Discord refused type 15 (Cannot execute action on this channel type); '
+        'created as text']
     assert result.done["channels created"] == 9
     assert result.channel_ids[6] == "new10"
 
@@ -109,3 +111,54 @@ def test_unexpected_error_stops_with_progress_summary():
     assert lines[-2] == ("Stopped. Done so far: 4 channels deleted, 1 roles deleted, "
                          "2 roles created, 6 channels created")
     assert lines[-1] == "Re-run to wipe and rebuild."
+
+
+def test_already_deleted_channel_and_role_are_counted_and_the_build_continues():
+    api, target, plan = _setup()
+    api.fail_once(lambda method, path, body: method == "DELETE" and path == "/channels/911",
+                  NotFound(404, 10003, "Unknown Channel"))
+    api.fail_once(lambda method, path, body: method == "DELETE" and path.endswith("/roles/902"),
+                  NotFound(404, 10011, "Unknown Role"))
+    lines = []
+    result = build(api, target, plan, out=lines.append)
+    assert result.done["channels deleted"] == 4
+    assert result.done["roles deleted"] == 1
+    assert result.done["channels created"] == 9
+    assert '[delete channels 1/4] "general" (already gone)' in lines
+    assert '[delete roles 1/1] "Old" (already gone)' in lines
+
+
+def test_on_created_runs_after_channels_before_settings():
+    api, target, plan = _setup()
+    seen = []
+    build(api, target, plan, out=_quiet,
+          on_created=lambda result: seen.append((len(api.writes()), dict(result.channel_ids))))
+    assert len(seen) == 1
+    assert seen[0][0] == 17   # every write but the final settings PATCH
+    assert len(seen[0][1]) == 9
+
+
+def test_keyboard_interrupt_prints_progress_summary_and_propagates():
+    api, target, plan = _setup()
+    api.fail_once(lambda method, path, body: method == "POST" and body.get("name") == "rules",
+                  KeyboardInterrupt())
+    lines = []
+    with pytest.raises(KeyboardInterrupt):
+        build(api, target, plan, out=lines.append)
+    assert lines[-2].startswith("Stopped. Done so far: 4 channels deleted")
+    assert lines[-1] == "Re-run to wipe and rebuild."
+
+
+def test_previous_build_roles_are_wiped_and_the_owners_role_is_kept():
+    roles = [
+        {"id": GUILD_ID, "name": "@everyone", "position": 0, "permissions": "0", "managed": False},
+        {"id": "901", "name": "Builder", "position": 1, "permissions": "8", "managed": True},
+        {"id": "960", "name": "Member", "position": 1, "permissions": "0", "managed": False},
+        {"id": "961", "name": "Moderator", "position": 1, "permissions": "0", "managed": False},
+        {"id": "800", "name": "Owner", "position": 1, "permissions": "8", "managed": False},
+    ]
+    api = FakeApi(server_state(roles=roles))
+    target = read_target(api, GUILD_ID)
+    plan = build_plan(load_template(FIXTURE).source, target)
+    assert sorted(r["id"] for r in plan.delete_roles) == ["960", "961"]
+    assert "role \"Owner\" (not below the bot's role)" in plan.protected

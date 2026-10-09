@@ -1,4 +1,5 @@
 import argparse
+import json
 import re
 import sys
 
@@ -8,7 +9,7 @@ from src.api import DiscordApi
 from src.builder import build, read_target
 from src.config import invite_url, load_token
 from src.errors import (ApiError, ConfigError, ConfirmationFailed, Forbidden, InvalidToken, NetworkError,
-                        NotAdministrator, NotFound, RateLimited, TemplateError)
+                        NotAdministrator, NotFound, NotInServer, RateLimited, TemplateError)
 from src.idmap import id_map_path, make_id_map, write_id_map
 from src.plan import build_plan
 from src.template import load_template
@@ -45,7 +46,10 @@ def open_api(token):
 def confirm(name, input_fn, stdin):
     if not stdin.isatty():
         raise ConfirmationFailed("Refusing to wipe without an interactive confirmation")
-    typed = input_fn(f'Type the server name "{name}" to continue: ')
+    try:
+        typed = input_fn(f'Type the server name "{name}" to continue: ')
+    except (EOFError, KeyboardInterrupt):
+        raise ConfirmationFailed("Cancelled — nothing was changed") from None
     if typed.strip() != name:
         raise ConfirmationFailed("Server name didn't match — nothing was changed")
 
@@ -79,26 +83,48 @@ def _run(args, input_fn, stdin):
         return 0
     template = load_template(args.template)   # before any request
     api = open_api(token)
-    target = read_target(api, args.guild)
+    try:
+        target = read_target(api, args.guild)
+    except NotFound:
+        raise NotInServer(args.guild) from None
+    except Forbidden as e:
+        # Only reading the server says anything about membership; build-time errors stay plain API errors.
+        if e.code == MISSING_ACCESS:
+            raise NotInServer(args.guild) from None
+        raise NotAdministrator(args.guild) from None
     plan = build_plan(template.source, target)
     print_plan(target, plan, detailed=args.dry_run)
     if args.dry_run:
         print("Dry run — nothing was changed.")
         return 0
     confirm(target.name, input_fn, stdin)
-    result = build(api, target, plan)
-    print("Done: " + ", ".join(f"{n} {what}" for what, n in result.done.items()))
-    for item in result.adjustments:
-        print(f"  adjusted: {item}")
-    id_map = make_id_map(template, target.guild_id, result)
-    if id_map is None:
-        print("No ID map: this template has no source_ids (re-export it with the current discord-template-export).")
-    else:
+    status = [0]
+
+    def save_id_map(result):
+        # Called as soon as everything is created, so a late failure still leaves the map.
+        id_map = make_id_map(template, target.guild_id, result)
+        if id_map is None:
+            print("No ID map: this template has no source_ids "
+                  "(re-export it with the current discord-template-export).")
+            return
         path = id_map_path(args.template)
-        write_id_map(id_map, path)
-        print(f"ID map written to {path}")
+        try:
+            write_id_map(id_map, path)
+        except OSError as e:
+            print(f"Couldn't write {path} ({e}). The ID map is printed below — save it:")
+            print(json.dumps(id_map, indent=2, ensure_ascii=False))
+            status[0] = 1
+        else:
+            print(f"ID map written to {path}")
+
+    result = build(api, target, plan, on_created=save_id_map)
+    print("Done: " + ", ".join(f"{n} {what}" for what, n in result.done.items()))
+    for item in plan.protected:
+        print(f"  kept: {item}")
+    for item in plan.adjustments + result.adjustments:
+        print(f"  adjusted: {item}")
     print("Tip: Server Settings → Server Template → Generate makes an official discord.new link from this server.")
-    return 0
+    return status[0]
 
 
 def _invite_hint():
@@ -127,17 +153,16 @@ def main(argv=None, input_fn=input, stdin=None):
         message = "BOT_TOKEN is invalid — check .env"
     except NotAdministrator:
         message = f"The bot needs Administrator in server {args.guild} — re-invite it: {_invite_hint()}"
-    except (NotFound, Forbidden) as e:
-        if isinstance(e, NotFound) or e.code == MISSING_ACCESS:
-            message = f"The bot isn't in server {args.guild} — invite it: {_invite_hint()}"
-        else:
-            message = f"The bot needs Administrator in server {args.guild} — re-invite it: {_invite_hint()}"
+    except NotInServer:
+        message = f"The bot isn't in server {args.guild} — invite it: {_invite_hint()}"
     except RateLimited:
         message = "Rate limited by Discord too many times — wait and re-run"
     except NetworkError:
         message = "Network error talking to Discord — re-run"
     except ApiError as e:
         message = f"Discord API error {e.status} ({e.code}): {e.message}"
+    except KeyboardInterrupt:
+        message = "Interrupted — re-run to wipe and rebuild"
     print(message, file=sys.stderr)
     return 1
 

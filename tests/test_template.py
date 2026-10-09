@@ -48,14 +48,29 @@ def test_template_without_source_ids(tmp_path):
 
 @pytest.mark.parametrize("source_ids, message", [
     ("nope", "source_ids must be an object"),
-    ({"roles": {"99": "123"}}, "source_ids.roles: '99' is not a role in the template"),
-    ({"channels": {"x": "123"}}, "source_ids.channels: 'x' is not a channel in the template"),
+    ({"channels": {"x": "123"}}, "source_ids.channels: 'x' is not an id"),
     ({"channels": {"1": "abc"}}, "source_ids.channels.1: 'abc' is not a Discord ID"),
 ])
 def test_bad_source_ids_rejected(tmp_path, source_ids, message):
     data = {"serialized_source_guild": _source(), "source_ids": source_ids}
     with pytest.raises(TemplateError, match=re.escape(message)):
         load_template(_write_file(tmp_path, data))
+
+
+def test_unknown_numeric_source_id_is_dropped(tmp_path):
+    data = {"serialized_source_guild": _source(), "source_ids": {"roles": {"99": "123", "1": "201"}}}
+    template = load_template(_write_file(tmp_path, data))
+    assert template.source_ids["roles"] == {1: "201"}
+
+
+def test_stripped_template_still_loads(tmp_path):
+    data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    source = data["serialized_source_guild"]
+    source["channels"] = [c for c in source["channels"] if c["id"] != 2]
+    assert "2" in data["source_ids"]["channels"]
+    template = load_template(_write_file(tmp_path, data))
+    assert 2 not in template.source_ids["channels"]
+    assert 1 in template.source_ids["channels"]
 
 
 def test_missing_file(tmp_path):

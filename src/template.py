@@ -52,11 +52,12 @@ def _source_ids(raw, source):
             raise TemplateError(f"source_ids.{kind} must be an object")
         converted = {}
         for key, original in mapping.items():
-            if not (isinstance(key, str) and re.fullmatch(r"[0-9]+", key) and int(key) in known[kind]):
-                raise TemplateError(f"source_ids.{kind}: {key!r} is not a {kind[:-1]} in the template")
+            if not (isinstance(key, str) and re.fullmatch(r"[0-9]+", key)):
+                raise TemplateError(f"source_ids.{kind}: {key!r} is not an id")
             if not (isinstance(original, str) and SNOWFLAKE.fullmatch(original)):
                 raise TemplateError(f"source_ids.{kind}.{key}: {original!r} is not a Discord ID")
-            converted[int(key)] = original
+            if int(key) in known[kind]:   # entries for things the user deleted from the template are dropped
+                converted[int(key)] = original
         result[kind] = converted
     return result
 

@@ -45,7 +45,8 @@ class DiscordApi:
                 response = self._session.request(method, API_BASE + path, headers=headers,
                                                  json=body, timeout=TIMEOUT_S)
             except requests.RequestException as e:
-                if retried:
+                # A POST that timed out may have succeeded; repeating it could create a duplicate.
+                if retried or method == "POST":
                     raise NetworkError(f"{method} {path}: {type(e).__name__}") from None
                 retried = True
                 self._sleep(RETRY_DELAY_S)

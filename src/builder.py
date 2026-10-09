@@ -2,7 +2,7 @@
 from collections import Counter
 from dataclasses import dataclass
 
-from src.errors import ApiError, NotAdministrator
+from src.errors import ApiError, NotAdministrator, NotFound
 from src.plan import ADMINISTRATOR, Target, text_fallback
 
 
@@ -33,13 +33,14 @@ def read_target(api, guild_id):
                   public_updates_channel_id=guild.get("public_updates_channel_id"))
 
 
-def build(api, target, plan, out=print):
-    return Builder(api, target, plan, out).run()
+def build(api, target, plan, out=print, on_created=None):
+    return Builder(api, target, plan, out, on_created).run()
 
 
 class Builder:
-    def __init__(self, api, target, plan, out=print):
+    def __init__(self, api, target, plan, out=print, on_created=None):
         self.api = api
+        self.on_created = on_created
         self.plan = plan
         self.out = out
         self.guild = target.guild_id
@@ -55,29 +56,42 @@ class Builder:
             self._update_everyone()
             self._create_roles()
             self._create_channels()
+            if self.on_created:
+                self.on_created(self._result())
             self._update_settings()
-        except Exception:
+        except BaseException:   # Ctrl-C too: say where the build stopped
             self.out("Stopped. Done so far: " + (", ".join(f"{n} {what}" for what, n in self.done.items())
                                                  or "nothing"))
             self.out("Re-run to wipe and rebuild.")
             raise
+        return self._result()
+
+    def _result(self):
         return BuildResult(self.done, self.adjustments, self.role_ids, self.channel_ids)
 
-    def _progress(self, section, i, total, name):
-        self.out(f'[{section} {i}/{total}] "{name}"')
+    def _progress(self, section, i, total, name, already_gone=False):
+        self.out(f'[{section} {i}/{total}] "{name}"' + (" (already gone)" if already_gone else ""))
+
+    def _delete(self, path):
+        """Delete; True if it was already gone (404), which counts as deleted."""
+        try:
+            self.api.delete(path)
+        except NotFound:
+            return True
+        return False
 
     def _delete_channels(self):
         channels = self.plan.delete_channels
         for i, channel in enumerate(channels, 1):
-            self.api.delete(f"/channels/{channel['id']}")
-            self._progress("delete channels", i, len(channels), channel["name"])
+            gone = self._delete(f"/channels/{channel['id']}")
+            self._progress("delete channels", i, len(channels), channel["name"], gone)
             self.done["channels deleted"] += 1
 
     def _delete_roles(self):
         roles = self.plan.delete_roles
         for i, role in enumerate(roles, 1):
-            self.api.delete(f"/guilds/{self.guild}/roles/{role['id']}")
-            self._progress("delete roles", i, len(roles), role["name"])
+            gone = self._delete(f"/guilds/{self.guild}/roles/{role['id']}")
+            self._progress("delete roles", i, len(roles), role["name"], gone)
             self.done["roles deleted"] += 1
 
     def _update_everyone(self):
@@ -106,7 +120,8 @@ class Builder:
                     raise
                 created = self.api.post(f"/guilds/{self.guild}/channels", text_fallback(payload))
                 self.adjustments.append(
-                    f'channel "{payload["name"]}": Discord refused type {payload["type"]}; created as text')
+                    f'channel "{payload["name"]}": Discord refused type {payload["type"]} ({e.message}); '
+                    'created as text')
             self.channel_ids[step.template_id] = created["id"]
             self._progress("create channels", i, len(steps), payload["name"])
             self.done["channels created"] += 1

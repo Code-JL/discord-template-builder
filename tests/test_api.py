@@ -143,3 +143,11 @@ def test_non_json_error_body():
     with pytest.raises(ApiError) as info:
         api.get("/x")
     assert (info.value.code, info.value.message) == (0, "<html>nope</html>")
+
+
+def test_post_is_not_retried_after_a_network_error():
+    api, session, sleeps = make(requests.Timeout("slow"), FakeResponse(200, {"id": "1"}))
+    with pytest.raises(NetworkError):
+        api.post("/guilds/1/roles", {"name": "x"})
+    assert len(session.calls) == 1
+    assert sleeps == []
