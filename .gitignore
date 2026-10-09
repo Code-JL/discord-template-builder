@@ -1,0 +1,20 @@
+# Secrets — never commit
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Local only: spike scripts, real templates, design docs, agent workspace
+scripts/
+templates/
+docs/superpowers/
+.superpowers/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
